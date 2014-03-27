@@ -72,7 +72,7 @@ class PostScriptPrinter : public Printer {
                max_x * mm_to_point, max_y * mm_to_point);
         printf("%% PastePad. Stack: <diameter>\n/pp { 0.2 setlinewidth 0 360 arc stroke } def\n\n"
                "%% Move. Stack: <x> <y>\n/m { 0.01 setlinewidth lineto currentpoint stroke } def\n\n");
-        printf("72.0 25.4 div dup scale  %% Switch to mm\n", mm_to_point);
+        printf("72.0 25.4 div dup scale  %% Switch to mm\n");
         printf("%.1f %.1f moveto\n", offset_x - 10, offset_y - 10);
     }
 
