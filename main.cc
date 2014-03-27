@@ -14,9 +14,6 @@
 
 #include "rpt-parser.h"
 
-// The coordinates are in inches. Make that proper coordinates.
-static const float coordinate_factor = 25.4f;
-
 static const float minimum_milliseconds = 50;
 static const float area_to_milliseconds = 25;  // mm^2 to milliseconds.
 
@@ -72,15 +69,18 @@ class PostScriptPrinter : public Printer {
         printf("%%!PS-Adobe-3.0\n%%%%BoundingBox: %.0f %.0f %.0f %.0f\n",
                min_x * mm_to_point, min_y * mm_to_point,
                max_x * mm_to_point, max_y * mm_to_point);
-        printf("%% PastePad. Stack: <diameter>\n/pp { 1 setlinewidth 0 360 arc stroke } def\n"
-               "%% Move. Stack: <x> <y>\n/m { 0.1 setlinewidth lineto currentpoint stroke } def\n");
-        printf("0 0 moveto ");
+        printf("%% PastePad. Stack: <diameter>\n/pp { 0.2 setlinewidth 0 360 arc stroke } def\n"
+               "%% Move. Stack: <x> <y>\n/m { 0.01 setlinewidth lineto currentpoint stroke } def\n");
+        printf("%.4f dup scale\n", mm_to_point);
+        printf("%.1f %.1f moveto ", offset_x, offset_y);
     }
 
     virtual void Pad(float x, float y, float area) {
+#if 0
         const float mm_to_point = 1 / 25.4 * 72.0;
         x *= mm_to_point;
         y *= mm_to_point;
+#endif
         printf("%.3f %.3f m %.3f pp \n%.3f %.3f moveto\n",
                x, y, sqrtf(area / M_PI), x, y);
     }
@@ -118,8 +118,8 @@ public:
     virtual void Position(float x, float y) {
         if (current_pad_ != NULL) {
             rotateXY(&x, &y);
-            current_pad_->x = (origin_x_ + x) * coordinate_factor;
-            current_pad_->y = (origin_y_ + y) * coordinate_factor;
+            current_pad_->x = origin_x_ + x;
+            current_pad_->y = origin_y_ + y;
         }
         else {
             origin_x_ = x;
@@ -128,7 +128,7 @@ public:
     }
     virtual void Size(float w, float h) {
         if (current_pad_ == NULL) return;
-        current_pad_->area = w * coordinate_factor * coordinate_factor * h;
+        current_pad_->area = w * h;
     }
 
     virtual void Drill(float size) {
