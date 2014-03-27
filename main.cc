@@ -26,11 +26,40 @@ static float offset_y = 10;
 #define Z_HOVER_DISPENSER "2.5"   // Hovering above position
 #define Z_HIGH_UP_DISPENSER "5"   // high up to separate paste.
 
+// Determiness coordinates that are closest to the corner.
+class CornerPadCollector {
+public:
+    void SetCorners(float min_x, float min_y, float max_x, float max_y) {
+        corners_[0].x = min_x;  corners_[0].y = min_y;
+        corners_[1].x = max_x;  corners_[1].y = min_y;
+        corners_[2].x = min_x;  corners_[2].y = max_y;
+        corners_[3].x = max_x;  corners_[3].y = max_y;
+        for (int i = 0; i < 4; ++i) corner_distance_[i] = -1;
+    }
+
+    void Update(const Position &pos) {
+        for (int i = 0; i < 4; ++i) {
+            const float distance = Distance(corners_[i], pos);
+            if (corner_distance_[i] < 0 || distance < corner_distance_[i]) {
+                corner_distance_[i] = distance;
+                closest_match_[i] = pos;
+            }
+        }
+    }
+
+    const Position &get_closest(int i) const { return closest_match_[i]; }
+
+private:
+    Position corners_[4];
+    float corner_distance_[4];
+    Position closest_match_[4];
+};
+
 class Printer {
 public:
     virtual ~Printer() {}
     virtual void Init(float min_x, float min_y, float max_x, float max_y) = 0;
-    virtual void Pad(float x, float y, float area) = 0;
+    virtual void Pad(const Position &pos, float area) = 0;
     virtual void Finish() = 0;
 };
 
@@ -47,7 +76,7 @@ public:
                );
     }
 
-    virtual void Pad(float x, float y, float area) {
+    virtual void Pad(const Position &pos, float area) {
         printf(
                "G0 X%.3f Y%.3f Z" Z_HOVER_DISPENSER "\n"  // move to new position, above board
                "G1 Z" Z_DISPENSING "\n"                   // ready to dispense.
@@ -55,7 +84,7 @@ public:
                "G4 P%.1f\n"           // Wait given milliseconds; dependend on area.
                "M107\n"               // switch off fan
                "G1 Z" Z_HIGH_UP_DISPENSER "\n", // high above to have paste is well separated
-               x, y, minimum_milliseconds + area * area_to_milliseconds);
+               pos.x, pos.y, minimum_milliseconds + area * area_to_milliseconds);
     }
 
     virtual void Finish() {
@@ -63,8 +92,42 @@ public:
     }
 };
 
-class PostScriptPrinter : public Printer {
+class GCodeCornerIndicator : public Printer {
+public:
     virtual void Init(float min_x, float min_y, float max_x, float max_y) {
+        corners_.SetCorners(min_x, min_y, max_x, max_y);
+        // G-code preamble. Set feed rate, homing etc.
+        printf(
+               //    "G28\n" assume machine is already homed before g-code is executed
+               "G21\n" // set to mm
+               "G1 F2000\n"
+               "G0 Z4\n" // X0 Y0 may be outside the reachable area, and no need to go there
+               );
+    }
+
+    virtual void Pad(const Position &pos, float area) {
+        corners_.Update(pos);
+    }
+
+    virtual void Finish() {
+        for (int i = 0; i < 4; ++i) {
+            const Position &p = corners_.get_closest(i);
+            printf("G0 %.3f %.3f Z" Z_DISPENSING "\n"
+                   "G4 P2000\n"
+                   "G0 " Z_HIGH_UP_DISPENSER "\n",
+                   p.x, p.y);
+        }
+        printf(";done\n");
+    }
+
+private:
+    CornerPadCollector corners_;
+};
+
+class PostScriptPrinter : public Printer {
+public:
+    virtual void Init(float min_x, float min_y, float max_x, float max_y) {
+        corners_.SetCorners(min_x, min_y, max_x, max_y);
         min_x -= 2; min_y -=2; max_x +=2; max_y += 2;
         const float mm_to_point = 1 / 25.4 * 72.0;
         printf("%%!PS-Adobe-3.0\n%%%%BoundingBox: %.0f %.0f %.0f %.0f\n\n",
@@ -76,14 +139,24 @@ class PostScriptPrinter : public Printer {
         printf("%.1f %.1f moveto\n", offset_x, offset_y);
     }
 
-    virtual void Pad(float x, float y, float area) {
+    virtual void Pad(const Position &pos, float area) {
+        corners_.Update(pos);
         printf("%.3f %.3f m %.3f pp \n%.3f %.3f moveto ",
-               x, y, sqrtf(area / M_PI), x, y);
+               pos.x, pos.y, sqrtf(area / M_PI), pos.x, pos.y);
     }
 
     virtual void Finish() {
+        printf("0 0 1 setrgbcolor\n");
+        for (int i = 0; i < 4; ++i) {
+            const Position &p = corners_.get_closest(i);
+            printf("%.1f 2 add %.1f moveto %.1f %.1f 2 0 360 arc stroke\n",
+                   p.x, p.y, p.x, p.y);
+        }
         printf("showpage\n");
     }
+
+private:
+    CornerPadCollector corners_;
 };
 
 class PadCollector : public ParseEventReceiver {
@@ -106,8 +179,8 @@ public:
     virtual void Position(float x, float y) {
         if (current_pad_ != NULL) {
             rotateXY(&x, &y);
-            current_pad_->x = origin_x_ + x;
-            current_pad_->y = origin_y_ + y;
+            current_pad_->pos.x = origin_x_ + x;
+            current_pad_->pos.y = origin_y_ + y;
         }
         else {
             origin_x_ = x;
@@ -157,14 +230,22 @@ static int usage(const char *prog) {
             prog);
     return 1;
 }
+
 int main(int argc, char *argv[]) {
-    bool do_postscript = false;
+    enum OutputType {
+        OUT_DISPENSING,
+        OUT_CORNER_GCODE,
+        OUT_POSTSCRIPT
+    } output_type = OUT_DISPENSING;
 
     int opt;
-    while ((opt = getopt(argc, argv, "p")) != -1) {
+    while ((opt = getopt(argc, argv, "pc")) != -1) {
         switch (opt) {
         case 'p':
-            do_postscript = true;
+            output_type = OUT_POSTSCRIPT;
+            break;
+        case 'c':
+            output_type = OUT_CORNER_GCODE;
             break;
         default: /* '?' */
             return usage(argv[0]);
@@ -185,20 +266,21 @@ int main(int argc, char *argv[]) {
     // The coordinates coming out of the file are mirrored, so we determine the maximum
     // to mirror at these axes.
     // (mmh, looks like it is only mirrored on y axis ?)
-    float min_x = pads[0]->x, min_y = pads[0]->y;
-    float max_x = pads[0]->x, max_y = pads[0]->y;
+    float min_x = pads[0]->pos.x, min_y = pads[0]->pos.y;
+    float max_x = pads[0]->pos.x, max_y = pads[0]->pos.y;
     for (size_t i = 0; i < pads.size(); ++i) {
-        min_x = std::min(min_x, pads[i]->x);
-        min_y = std::min(min_y, pads[i]->y);
-        max_x = std::max(max_x, pads[i]->x);
-        max_y = std::max(max_y, pads[i]->y);
+        min_x = std::min(min_x, pads[i]->pos.x);
+        min_y = std::min(min_y, pads[i]->pos.y);
+        max_x = std::max(max_x, pads[i]->pos.x);
+        max_y = std::max(max_y, pads[i]->pos.y);
     }
 
     Printer *printer;
-    if (do_postscript)
-        printer = new PostScriptPrinter();
-    else
-        printer = new GCodePrinter();
+    switch (output_type) {
+    case OUT_DISPENSING:   printer = new GCodePrinter(); break;
+    case OUT_CORNER_GCODE: printer = new GCodeCornerIndicator(); break;
+    case OUT_POSTSCRIPT:   printer = new PostScriptPrinter(); break;
+    }
 
     OptimizePads(&pads);
 
@@ -209,8 +291,8 @@ int main(int argc, char *argv[]) {
         const Pad *pad = pads[i];
         // We move x-coordinates relative to the smallest X.
         // Y-coordinates are mirrored at the maximum Y (that is how the come out of the file)
-        printer->Pad(pad->x + offset_x - min_x,
-                     max_y - pad->y + offset_y,
+        printer->Pad(Position(pad->pos.x + offset_x - min_x,
+                              max_y - pad->pos.y + offset_y),
                      pad->area);
     }
 

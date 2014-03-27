@@ -8,8 +8,8 @@
 #include <unistd.h>
 
 static float euklid(float a, float b) { return sqrtf(a*a + b*b); }
-static float PadDistance(const Pad* a, const Pad* b) {
-    return euklid(a->x - b->x, a->y - b->y);
+float Distance(const Position& a, const Position& b) {
+    return euklid(a.x - b.x, a.y - b.y);
 }
 static void Swap(std::vector<const Pad*> *pads, size_t i, size_t j) {
     const Pad* tmp = (*pads)[i];
@@ -24,7 +24,7 @@ void OptimizePads(std::vector<const Pad*> *pads) {
         float smallest_distance;
         int best = -1;
         for (size_t j = i + 1; j < pads->size(); ++j) {
-            float distance = PadDistance(reference, (*pads)[j]);
+            float distance = Distance(reference->pos, (*pads)[j]->pos);
             if (best < 0 || distance < smallest_distance) {
                 best = j;
                 smallest_distance = distance;
