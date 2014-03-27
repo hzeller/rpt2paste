@@ -226,7 +226,9 @@ private:
 
 static int usage(const char *prog) {
     fprintf(stderr, "Usage: %s <options> <rpt-file>\n"
-            "Options:\n\t-p    : Output as PostScript\n",
+            "Options:\n"
+            "\t-p    : Output as PostScript\n"
+            "\t-c    : Output Dry-run GCode for corner-pads.\n",
             prog);
     return 1;
 }
