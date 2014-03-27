@@ -19,8 +19,8 @@ static const float minimum_milliseconds = 50;
 static const float area_to_milliseconds = 25;  // mm^2 to milliseconds.
 
 // Smallest point from origin.
-static float offset_x = 50;
-static float offset_y = 50;
+static float offset_x = 10;
+static float offset_y = 10;
 
 #define Z_DISPENSING "1.7"        // Position to dispense stuff. Just above board.
 #define Z_HOVER_DISPENSER "2.5"   // Hovering above position
@@ -65,7 +65,7 @@ public:
 
 class PostScriptPrinter : public Printer {
     virtual void Init(float min_x, float min_y, float max_x, float max_y) {
-        min_x -= 3; min_y -=3; max_x +=3; max_y += 3;
+        min_x -= 2; min_y -=2; max_x +=2; max_y += 2;
         const float mm_to_point = 1 / 25.4 * 72.0;
         printf("%%!PS-Adobe-3.0\n%%%%BoundingBox: %.0f %.0f %.0f %.0f\n\n",
                min_x * mm_to_point, min_y * mm_to_point,
@@ -73,7 +73,7 @@ class PostScriptPrinter : public Printer {
         printf("%% PastePad. Stack: <diameter>\n/pp { 0.2 setlinewidth 0 360 arc stroke } def\n\n"
                "%% Move. Stack: <x> <y>\n/m { 0.01 setlinewidth lineto currentpoint stroke } def\n\n");
         printf("72.0 25.4 div dup scale  %% Switch to mm\n");
-        printf("%.1f %.1f moveto\n", offset_x - 10, offset_y - 10);
+        printf("%.1f %.1f moveto\n", offset_x, offset_y);
     }
 
     virtual void Pad(float x, float y, float area) {
