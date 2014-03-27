@@ -1,5 +1,5 @@
 CXXFLAGS=-Wall
-rpt2paste: main.o rpt-parser.o
+rpt2paste: main.o rpt-parser.o optimizer.o
 	g++ -o $@ $^
 
 clean:

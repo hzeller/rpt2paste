@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "rpt-parser.h"
+#include "rpt2paste.h"
 
 static const float minimum_milliseconds = 50;
 static const float area_to_milliseconds = 25;  // mm^2 to milliseconds.
@@ -21,9 +22,9 @@ static const float area_to_milliseconds = 25;  // mm^2 to milliseconds.
 static float offset_x = 50;
 static float offset_y = 50;
 
-#define Z_DISPENSING "0.6"        // Position to dispense stuff.
-#define Z_HOVER_DISPENSER "2"     // Hovering above position
-#define Z_HIGH_UP_DISPENSER "4"   // high up to separate paste.
+#define Z_DISPENSING "1.7"        // Position to dispense stuff. Just above board.
+#define Z_HOVER_DISPENSER "2.5"   // Hovering above position
+#define Z_HIGH_UP_DISPENSER "5"   // high up to separate paste.
 
 class Printer {
 public:
@@ -66,22 +67,17 @@ class PostScriptPrinter : public Printer {
     virtual void Init(float min_x, float min_y, float max_x, float max_y) {
         min_x -= 3; min_y -=3; max_x +=3; max_y += 3;
         const float mm_to_point = 1 / 25.4 * 72.0;
-        printf("%%!PS-Adobe-3.0\n%%%%BoundingBox: %.0f %.0f %.0f %.0f\n",
+        printf("%%!PS-Adobe-3.0\n%%%%BoundingBox: %.0f %.0f %.0f %.0f\n\n",
                min_x * mm_to_point, min_y * mm_to_point,
                max_x * mm_to_point, max_y * mm_to_point);
-        printf("%% PastePad. Stack: <diameter>\n/pp { 0.2 setlinewidth 0 360 arc stroke } def\n"
-               "%% Move. Stack: <x> <y>\n/m { 0.01 setlinewidth lineto currentpoint stroke } def\n");
-        printf("%.4f dup scale\n", mm_to_point);
-        printf("%.1f %.1f moveto ", offset_x, offset_y);
+        printf("%% PastePad. Stack: <diameter>\n/pp { 0.2 setlinewidth 0 360 arc stroke } def\n\n"
+               "%% Move. Stack: <x> <y>\n/m { 0.01 setlinewidth lineto currentpoint stroke } def\n\n");
+        printf("72.0 25.4 div dup scale  %% Switch to mm\n", mm_to_point);
+        printf("%.1f %.1f moveto\n", offset_x - 10, offset_y - 10);
     }
 
     virtual void Pad(float x, float y, float area) {
-#if 0
-        const float mm_to_point = 1 / 25.4 * 72.0;
-        x *= mm_to_point;
-        y *= mm_to_point;
-#endif
-        printf("%.3f %.3f m %.3f pp \n%.3f %.3f moveto\n",
+        printf("%.3f %.3f m %.3f pp \n%.3f %.3f moveto ",
                x, y, sqrtf(area / M_PI), x, y);
     }
 
@@ -89,14 +85,6 @@ class PostScriptPrinter : public Printer {
         printf("showpage\n");
     }
 };
-
-struct Pad {
-    Pad() : x(0), y(0), drill(0), area(0) {}
-    float x, y;
-    float drill;
-    float area;
-};
-
 
 class PadCollector : public ParseEventReceiver {
 public:
@@ -211,6 +199,8 @@ int main(int argc, char *argv[]) {
         printer = new PostScriptPrinter();
     else
         printer = new GCodePrinter();
+
+    OptimizePads(&pads);
 
     printer->Init(offset_x, offset_y,
                   (max_x - min_x) + offset_x, (max_y - min_y) + offset_y);
