@@ -23,7 +23,7 @@ static float offset_x = 10;
 static float offset_y = 10;
 
 #define Z_DISPENSING "1.7"        // Position to dispense stuff. Just above board.
-#define Z_HOVER_DISPENSER "2.5"   // Hovering above position
+#define Z_HOVER_DISPENSER "2.5"   // Hovering above position.
 #define Z_HIGH_UP_DISPENSER "5"   // high up to separate paste.
 
 // Determiness coordinates that are closest to the corner.
@@ -72,7 +72,7 @@ public:
                "G21\n" // set to mm
                "G0 F20000\n"
                "G1 F4000\n"
-               "G0 Z4\n" // X0 Y0 may be outside the reachable area, and no need to go there
+               "G0 Z" Z_HIGH_UP_DISPENSER "\n"
                );
     }
 
@@ -226,7 +226,9 @@ private:
 
 static int usage(const char *prog) {
     fprintf(stderr, "Usage: %s <options> <rpt-file>\n"
-            "Options:\n\t-p    : Output as PostScript\n",
+            "Options:\n"
+            "\t-p    : Output as PostScript.\n"
+            "\t-c    : Output corner DryRun G-Code.\n",
             prog);
     return 1;
 }

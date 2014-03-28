@@ -17,20 +17,25 @@ static void Swap(std::vector<const Pad*> *pads, size_t i, size_t j) {
     (*pads)[j] = tmp;
 }
 
+static int FindSmallestDistance(const std::vector<const Pad*> pads,
+                                size_t range_start,
+                                const Position &reference_pos) {
+    float smallest_distance;
+    int best = -1;
+    for (size_t j = range_start; j < pads.size(); ++j) {
+        float distance = Distance(reference_pos, pads[j]->pos);
+        if (best < 0 || distance < smallest_distance) {
+            best = j;
+            smallest_distance = distance;
+        }
+    }
+    return best;
+}
+
 // Very crude, O(n^2) optimization looking for nearest neighbor. Not TSP, but better than random
 void OptimizePads(std::vector<const Pad*> *pads) {
     for (size_t i = 0; i < pads->size() - 1; ++i) {
-        const Pad *reference = (*pads)[i];
-        float smallest_distance;
-        int best = -1;
-        for (size_t j = i + 1; j < pads->size(); ++j) {
-            float distance = Distance(reference->pos, (*pads)[j]->pos);
-            if (best < 0 || distance < smallest_distance) {
-                best = j;
-                smallest_distance = distance;
-            }
-        }
-        Swap(pads, i + 1, best);
+        Swap(pads, i + 1, FindSmallestDistance(*pads, i + 1, (*pads)[i]->pos));
     }
 }
 
