@@ -4,13 +4,15 @@
 
 #include <iostream>
 
+#include <string>
+
 // Event callbacks, to be implemented by whoever is interested in that stuff.
 // These are the raw parse events, the recipient needs to gather all the
 // relevant data.
 // Units are in mm.
 class ParseEventReceiver {
 public:
-    virtual void StartComponent() = 0;  // 'module' in french.
+    virtual void StartComponent(const std::string &name) = 0;  // 'module' in french.
     virtual void EndComponent() = 0;
 
     virtual void StartPad() =  0;

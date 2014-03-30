@@ -3,6 +3,7 @@
  */
 
 #include <vector>
+#include <string>
 
 struct Position {
     Position(float xx, float yy) : x(xx), y(yy) {}
@@ -12,6 +13,7 @@ struct Position {
 
 struct Pad {
     Pad() : pos(), drill(0), area(0) {}
+    std::string component_name;
     Position pos;
     float drill;
     float area;

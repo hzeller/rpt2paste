@@ -19,8 +19,11 @@ bool RptParse(std::istream *input, ParseEventReceiver *event) {
             if (value == "INCH")
                 unit_conversion = 25.4;
         }
-        else if (token == "$MODULE")
-            event->StartComponent();
+        else if (token == "$MODULE") {
+            std::string value;
+            (*input) >> value;
+            event->StartComponent(value);
+        }
         else if (token == "$EndMODULE")
             event->EndComponent();
         else if (token == "$PAD")

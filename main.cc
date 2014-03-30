@@ -59,7 +59,7 @@ class Printer {
 public:
     virtual ~Printer() {}
     virtual void Init(float min_x, float min_y, float max_x, float max_y) = 0;
-    virtual void Pad(const Position &pos, float area) = 0;
+    virtual void Pad(const Position &pos, const Pad &pad) = 0;
     virtual void Finish() = 0;
 };
 
@@ -77,15 +77,16 @@ public:
                );
     }
 
-    virtual void Pad(const Position &pos, float area) {
+    virtual void Pad(const Position &pos, const ::Pad &pad) {
         printf(
-               "G0 X%.3f Y%.3f Z" Z_HOVER_DISPENSER "\n"  // move to new position, above board
+               "G0 X%.3f Y%.3f Z" Z_HOVER_DISPENSER " ; %s\n"  // move to new position, above board
                "G1 Z" Z_DISPENSING "\n"                   // ready to dispense.
                "M106\n"               // switch on fan (=solenoid)
                "G4 P%.1f\n"           // Wait given milliseconds; dependend on area.
                "M107\n"               // switch off fan
                "G1 Z" Z_HIGH_UP_DISPENSER "\n", // high above to have paste is well separated
-               pos.x, pos.y, init_ms_ + area * area_ms_);
+               pos.x, pos.y, pad.component_name.c_str(),
+               init_ms_ + pad.area * area_ms_);
     }
 
     virtual void Finish() {
@@ -109,7 +110,7 @@ public:
                );
     }
 
-    virtual void Pad(const Position &pos, float area) {
+    virtual void Pad(const Position &pos, const ::Pad &pad) {
         corners_.Update(pos);
     }
 
@@ -143,10 +144,10 @@ public:
         printf("%.1f %.1f moveto\n", offset_x, offset_y);
     }
 
-    virtual void Pad(const Position &pos, float area) {
+    virtual void Pad(const Position &pos, const ::Pad &pad) {
         corners_.Update(pos);
         printf("%.3f %.3f m %.3f pp \n%.3f %.3f moveto ",
-               pos.x, pos.y, sqrtf(area / M_PI), pos.x, pos.y);
+               pos.x, pos.y, sqrtf(pad.area / M_PI), pos.x, pos.y);
     }
 
     virtual void Finish() {
@@ -168,10 +169,16 @@ public:
     PadCollector(std::vector<const Pad*> *pads) : origin_x_(0), origin_y_(0), current_pad_(NULL),
                                                   collected_pads_(pads) {}
 
-    virtual void StartComponent() { assert(current_pad_ == NULL); }
+    virtual void StartComponent(const std::string &c) {
+        component_name_ = c;
+        assert(current_pad_ == NULL);
+    }
     virtual void EndComponent() { }
 
-    virtual void StartPad() { current_pad_ = new Pad(); }
+    virtual void StartPad() {
+        current_pad_ = new Pad();
+        current_pad_->component_name = component_name_;
+    }
     virtual void EndPad() {
         if (current_pad_->drill != 0)
             delete current_pad_;  // through-hole. We're not interested in that.
@@ -223,6 +230,7 @@ private:
     float origin_y_;
     float angle_;
 
+    std::string component_name_;
     // If we have seen a start-pad, this is not-NULL.
     Pad *current_pad_;
     std::vector<const Pad*> *collected_pads_;
@@ -309,7 +317,7 @@ int main(int argc, char *argv[]) {
         // Y-coordinates are mirrored at the maximum Y (that is how the come out of the file)
         printer->Pad(Position(pad->pos.x + offset_x - min_x,
                               max_y - pad->pos.y + offset_y),
-                     pad->area);
+                     *pad);
     }
 
     printer->Finish();
