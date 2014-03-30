@@ -37,22 +37,25 @@ public:
         for (int i = 0; i < 4; ++i) corner_distance_[i] = -1;
     }
 
-    void Update(const Pad &pad) {
+    void Update(const Position &pos, const Pad &pad) {
         for (int i = 0; i < 4; ++i) {
-            const float distance = Distance(corners_[i], pad.pos);
+            const float distance = Distance(corners_[i], pos);
             if (corner_distance_[i] < 0 || distance < corner_distance_[i]) {
                 corner_distance_[i] = distance;
-                closest_match_[i] = pad;
+                closest_match_[i] = pos;
+                closest_pad_[i] = pad;
             }
         }
     }
 
-    const ::Pad &get_closest(int i) const { return closest_match_[i]; }
+    const ::Pad &get_pad(int i) const { return closest_pad_[i]; }
+    const Position &get_closest(int i) const { return closest_match_[i]; }
 
 private:
     Position corners_[4];
     float corner_distance_[4];
-    Pad closest_match_[4];
+    Position closest_match_[4];
+    Pad closest_pad_[4];
 };
 
 class Printer {
@@ -67,6 +70,7 @@ class GCodePrinter : public Printer {
 public:
     GCodePrinter(float init_ms, float area_ms) : init_ms_(init_ms), area_ms_(area_ms) {}
     virtual void Init(float min_x, float min_y, float max_x, float max_y) {
+        printf("; rpt2paste -d %.2f -D %.2f file.rpt\n", init_ms_, area_ms_);
         // G-code preamble. Set feed rate, homing etc.
         printf(
                //    "G28\n" assume machine is already homed before g-code is executed
@@ -114,16 +118,17 @@ public:
     }
 
     virtual void Pad(const Position &pos, const ::Pad &pad) {
-        corners_.Update(pad);
+        corners_.Update(pos, pad);
     }
 
     virtual void Finish() {
         for (int i = 0; i < 4; ++i) {
-            const ::Pad &p = corners_.get_closest(i);
+            const ::Pad &p = corners_.get_pad(i);
+            const Position pos = corners_.get_closest(i);
             printf("G0 X%.3f Y%.3f Z" Z_DISPENSING " ; comp=%s pad=%s\n"
                    "G4 P2000 ; area=%.1f mm^2; dispense-time=%.1fms\n"
                    "G0 Z" Z_HIGH_UP_DISPENSER "\n",
-                   p.pos.x, p.pos.y, p.component_name.c_str(), p.pad_name.c_str(),
+                   pos.x, pos.y, p.component_name.c_str(), p.pad_name.c_str(),
                    p.area, init_ms_ + p.area * area_ms_);
 
         }
@@ -152,7 +157,7 @@ public:
     }
 
     virtual void Pad(const Position &pos, const ::Pad &pad) {
-        corners_.Update(pad);
+        corners_.Update(pos, pad);
         printf("%.3f %.3f m %.3f pp \n%.3f %.3f moveto ",
                pos.x, pos.y, sqrtf(pad.area / M_PI), pos.x, pos.y);
     }
@@ -160,9 +165,10 @@ public:
     virtual void Finish() {
         printf("0 0 1 setrgbcolor\n");
         for (int i = 0; i < 4; ++i) {
-            const ::Pad &p = corners_.get_closest(i);
+            //const ::Pad &pad = corners_.get_pad(i);
+            const Position &pos = corners_.get_closest(i);
             printf("%.1f 2 add %.1f moveto %.1f %.1f 2 0 360 arc stroke\n",
-                   p.pos.x, p.pos.y, p.pos.x, p.pos.y);
+                   pos.x, pos.y, pos.x, pos.y);
         }
         printf("showpage\n");
     }
