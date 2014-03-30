@@ -65,6 +65,7 @@ public:
 
 class GCodePrinter : public Printer {
 public:
+    GCodePrinter(float init_ms, float area_ms) : init_ms_(init_ms), area_ms_(area_ms) {}
     virtual void Init(float min_x, float min_y, float max_x, float max_y) {
         // G-code preamble. Set feed rate, homing etc.
         printf(
@@ -84,12 +85,15 @@ public:
                "G4 P%.1f\n"           // Wait given milliseconds; dependend on area.
                "M107\n"               // switch off fan
                "G1 Z" Z_HIGH_UP_DISPENSER "\n", // high above to have paste is well separated
-               pos.x, pos.y, minimum_milliseconds + area * area_to_milliseconds);
+               pos.x, pos.y, init_ms_ + area * area_ms_);
     }
 
     virtual void Finish() {
         printf(";done\n");
     }
+private:
+    const float init_ms_;
+    const float area_ms_;
 };
 
 class GCodeCornerIndicator : public Printer {
@@ -227,9 +231,11 @@ private:
 static int usage(const char *prog) {
     fprintf(stderr, "Usage: %s <options> <rpt-file>\n"
             "Options:\n"
-            "\t-p    : Output as PostScript.\n"
-            "\t-c    : Output corner DryRun G-Code.\n",
-            prog);
+            "\t-p      : Output as PostScript.\n"
+            "\t-c      : Output corner DryRun G-Code.\n"
+            "\t-d <ms> : Dispensing init time ms (default %.1f)\n"
+            "\t-D <ms> : Dispensing time ms/mm^2 (default %.1f)\n",
+            prog, minimum_milliseconds, area_to_milliseconds);
     return 1;
 }
 
@@ -240,14 +246,22 @@ int main(int argc, char *argv[]) {
         OUT_POSTSCRIPT
     } output_type = OUT_DISPENSING;
 
+    float start_ms = minimum_milliseconds;
+    float area_ms = area_to_milliseconds;
     int opt;
-    while ((opt = getopt(argc, argv, "pc")) != -1) {
+    while ((opt = getopt(argc, argv, "pcd:D:")) != -1) {
         switch (opt) {
         case 'p':
             output_type = OUT_POSTSCRIPT;
             break;
         case 'c':
             output_type = OUT_CORNER_GCODE;
+            break;
+        case 'd':
+            start_ms = atof(optarg);
+            break;
+        case 'D':
+            area_ms = atof(optarg);
             break;
         default: /* '?' */
             return usage(argv[0]);
@@ -279,7 +293,7 @@ int main(int argc, char *argv[]) {
 
     Printer *printer;
     switch (output_type) {
-    case OUT_DISPENSING:   printer = new GCodePrinter(); break;
+    case OUT_DISPENSING:   printer = new GCodePrinter(start_ms, area_ms); break;
     case OUT_CORNER_GCODE: printer = new GCodeCornerIndicator(); break;
     case OUT_POSTSCRIPT:   printer = new PostScriptPrinter(); break;
     }
@@ -300,7 +314,8 @@ int main(int argc, char *argv[]) {
 
     printer->Finish();
 
-    fprintf(stderr, "Dispensed %zd pads.\n", pads.size());
+    fprintf(stderr, "Dispensed %zd pads (%.0f ms + %.0f mm/mm^2)\n",
+            pads.size(), start_ms, area_ms);
     for (size_t i = 0; i < pads.size(); ++i) {
         delete pads[i];
     }
