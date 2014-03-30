@@ -37,22 +37,22 @@ public:
         for (int i = 0; i < 4; ++i) corner_distance_[i] = -1;
     }
 
-    void Update(const Position &pos) {
+    void Update(const Pad &pad) {
         for (int i = 0; i < 4; ++i) {
-            const float distance = Distance(corners_[i], pos);
+            const float distance = Distance(corners_[i], pad.pos);
             if (corner_distance_[i] < 0 || distance < corner_distance_[i]) {
                 corner_distance_[i] = distance;
-                closest_match_[i] = pos;
+                closest_match_[i] = pad;
             }
         }
     }
 
-    const Position &get_closest(int i) const { return closest_match_[i]; }
+    const ::Pad &get_closest(int i) const { return closest_match_[i]; }
 
 private:
     Position corners_[4];
     float corner_distance_[4];
-    Position closest_match_[4];
+    Pad closest_match_[4];
 };
 
 class Printer {
@@ -100,6 +100,8 @@ private:
 
 class GCodeCornerIndicator : public Printer {
 public:
+    GCodeCornerIndicator(float init_ms, float area_ms) : init_ms_(init_ms), area_ms_(area_ms) {}
+
     virtual void Init(float min_x, float min_y, float max_x, float max_y) {
         corners_.SetCorners(min_x, min_y, max_x, max_y);
         // G-code preamble. Set feed rate, homing etc.
@@ -112,22 +114,26 @@ public:
     }
 
     virtual void Pad(const Position &pos, const ::Pad &pad) {
-        corners_.Update(pos);
+        corners_.Update(pad);
     }
 
     virtual void Finish() {
         for (int i = 0; i < 4; ++i) {
-            const Position &p = corners_.get_closest(i);
-            printf("G0 X%.3f Y%.3f Z" Z_DISPENSING "\n"
-                   "G4 P2000\n"
+            const ::Pad &p = corners_.get_closest(i);
+            printf("G0 X%.3f Y%.3f Z" Z_DISPENSING " ; comp=%s pad=%s\n"
+                   "G4 P2000 ; area=%.1f mm^2; dispense-time=%.1fms\n"
                    "G0 Z" Z_HIGH_UP_DISPENSER "\n",
-                   p.x, p.y);
+                   p.pos.x, p.pos.y, p.component_name.c_str(), p.pad_name.c_str(),
+                   p.area, init_ms_ + p.area * area_ms_);
+
         }
         printf(";done\n");
     }
 
 private:
     CornerPadCollector corners_;
+    const float init_ms_;
+    const float area_ms_;
 };
 
 class PostScriptPrinter : public Printer {
@@ -146,7 +152,7 @@ public:
     }
 
     virtual void Pad(const Position &pos, const ::Pad &pad) {
-        corners_.Update(pos);
+        corners_.Update(pad);
         printf("%.3f %.3f m %.3f pp \n%.3f %.3f moveto ",
                pos.x, pos.y, sqrtf(pad.area / M_PI), pos.x, pos.y);
     }
@@ -154,9 +160,9 @@ public:
     virtual void Finish() {
         printf("0 0 1 setrgbcolor\n");
         for (int i = 0; i < 4; ++i) {
-            const Position &p = corners_.get_closest(i);
+            const ::Pad &p = corners_.get_closest(i);
             printf("%.1f 2 add %.1f moveto %.1f %.1f 2 0 360 arc stroke\n",
-                   p.x, p.y, p.x, p.y);
+                   p.pos.x, p.pos.y, p.pos.x, p.pos.y);
         }
         printf("showpage\n");
     }
@@ -304,7 +310,7 @@ int main(int argc, char *argv[]) {
     Printer *printer;
     switch (output_type) {
     case OUT_DISPENSING:   printer = new GCodePrinter(start_ms, area_ms); break;
-    case OUT_CORNER_GCODE: printer = new GCodeCornerIndicator(); break;
+    case OUT_CORNER_GCODE: printer = new GCodeCornerIndicator(start_ms, area_ms); break;
     case OUT_POSTSCRIPT:   printer = new PostScriptPrinter(); break;
     }
 
@@ -313,6 +319,7 @@ int main(int argc, char *argv[]) {
     printer->Init(offset_x, offset_y,
                   (max_x - min_x) + offset_x, (max_y - min_y) + offset_y);
 
+    float dispense_time = 0;
     for (size_t i = 0; i < pads.size(); ++i) {
         const Pad *pad = pads[i];
         // We move x-coordinates relative to the smallest X.
@@ -320,12 +327,13 @@ int main(int argc, char *argv[]) {
         printer->Pad(Position(pad->pos.x + offset_x - min_x,
                               max_y - pad->pos.y + offset_y),
                      *pad);
+        dispense_time += start_ms + pad->area * area_ms;
     }
 
     printer->Finish();
 
-    fprintf(stderr, "Dispensed %zd pads (%.0f ms + %.0f mm/mm^2)\n",
-            pads.size(), start_ms, area_ms);
+    fprintf(stderr, "Dispensed %zd pads (%.0f ms + %.0f mm/mm^2). Total dispense time: %.1fs\n",
+            pads.size(), start_ms, area_ms, dispense_time / 1000.0f);
     for (size_t i = 0; i < pads.size(); ++i) {
         delete pads[i];
     }
