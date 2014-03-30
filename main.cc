@@ -82,11 +82,12 @@ public:
                "G0 X%.3f Y%.3f Z" Z_HOVER_DISPENSER " ; %s\n"  // move to new position, above board
                "G1 Z" Z_DISPENSING "\n"                   // ready to dispense.
                "M106\n"               // switch on fan (=solenoid)
-               "G4 P%.1f\n"           // Wait given milliseconds; dependend on area.
+               "G4 P%.1f ; %.2f mm^2\n"  // Wait given milliseconds; dependend on area.
                "M107\n"               // switch off fan
                "G1 Z" Z_HIGH_UP_DISPENSER "\n", // high above to have paste is well separated
                pos.x, pos.y, pad.component_name.c_str(),
-               init_ms_ + pad.area * area_ms_);
+               init_ms_ + pad.area * area_ms_,
+               pad.area);
     }
 
     virtual void Finish() {
