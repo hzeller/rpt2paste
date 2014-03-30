@@ -26,8 +26,11 @@ bool RptParse(std::istream *input, ParseEventReceiver *event) {
         }
         else if (token == "$EndMODULE")
             event->EndComponent();
-        else if (token == "$PAD")
-            event->StartPad();
+        else if (token == "$PAD") {
+            std::string value;
+            (*input) >> value;
+            event->StartPad(value);
+        }
         else if (token == "$EndPAD")
             event->EndPad();
         else if (token == "position") {

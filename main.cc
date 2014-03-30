@@ -79,13 +79,13 @@ public:
 
     virtual void Pad(const Position &pos, const ::Pad &pad) {
         printf(
-               "G0 X%.3f Y%.3f Z" Z_HOVER_DISPENSER " ; %s\n"  // move to new position, above board
+               "G0 X%.3f Y%.3f Z" Z_HOVER_DISPENSER " ; comp=%s, pad=%s\n"  // move to new position, above board
                "G1 Z" Z_DISPENSING "\n"                   // ready to dispense.
                "M106\n"               // switch on fan (=solenoid)
                "G4 P%.1f ; %.2f mm^2\n"  // Wait given milliseconds; dependend on area.
                "M107\n"               // switch off fan
                "G1 Z" Z_HIGH_UP_DISPENSER "\n", // high above to have paste is well separated
-               pos.x, pos.y, pad.component_name.c_str(),
+               pos.x, pos.y, pad.component_name.c_str(), pad.pad_name.c_str(),
                init_ms_ + pad.area * area_ms_,
                pad.area);
     }
@@ -176,9 +176,10 @@ public:
     }
     virtual void EndComponent() { }
 
-    virtual void StartPad() {
+    virtual void StartPad(const std::string &c) {
         current_pad_ = new Pad();
         current_pad_->component_name = component_name_;
+        current_pad_->pad_name = c;
     }
     virtual void EndPad() {
         if (current_pad_->drill != 0)

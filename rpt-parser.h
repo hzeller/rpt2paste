@@ -15,7 +15,7 @@ public:
     virtual void StartComponent(const std::string &name) = 0;  // 'module' in french.
     virtual void EndComponent() = 0;
 
-    virtual void StartPad() =  0;
+    virtual void StartPad(const std::string &name) =  0;
     virtual void EndPad() =  0;
 
     // Can be called within 'compponent' or 'pad'
