@@ -112,9 +112,9 @@ public:
     virtual void Finish() {
         for (int i = 0; i < 4; ++i) {
             const Position &p = corners_.get_closest(i);
-            printf("G0 %.3f %.3f Z" Z_DISPENSING "\n"
+            printf("G0 X%.3f Y%.3f Z" Z_DISPENSING "\n"
                    "G4 P2000\n"
-                   "G0 " Z_HIGH_UP_DISPENSER "\n",
+                   "G0 Z" Z_HIGH_UP_DISPENSER "\n",
                    p.x, p.y);
         }
         printf(";done\n");
