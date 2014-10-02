@@ -1,5 +1,5 @@
 **Note, this project is now superseded by https://github.com/hzeller/rpt2pnp
-- which does solder dispensing as well as pick and placing**
+which does solder dispensing as well as pick and placing**
   
 KiCAD RPT file to G-Code for didspensing solder paste.
 
